@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AstrosLi V1.5</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { background: #f5f7ff; color: #333; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    h1 { text-align: center; color: #6e45e2; margin-bottom: 20px; }
+    .hidden { display: none; }
+    button { background: #6e45e2; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; margin: 5px; }
+    button:hover { opacity: 0.9; }
+    input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 6px; }
+    .status { margin: 15px 0; padding: 10px; background: #e8f4fc; border-radius: 6px; }
+    .points { font-size: 1.2em; color: #2e7d32; font-weight: bold; }
+    .admin-only { background: #fff8e1; padding: 15px; border-radius: 8px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AstrosLi V1.5</h1>
+
+    <!-- Tela de Login -->
+    <div id="login-screen">
+      <h2>Login</h2>
+      <input type="email" id="email" placeholder="Seu e-mail" />
+      <input type="password" id="password" placeholder="Sua senha" />
+      <button onclick="loginWithEmail()">Entrar com e-mail</button>
+      <button onclick="loginWithGoogle()">Entrar com Google</button>
+      <p>Não tem conta? <button onclick="createAccount()">Criar conta grátis</button></p>
+    </div>
+
+    <!-- Área do Usuário -->
+    <div id="user-screen" class="hidden">
+      <h2>Bem-vindo, <span id="user-email"></span>!</h2>
+      <div class="status">
+        <div>Plano: <strong id="user-plan">Free</strong></div>
+        <div class="points">Pontos: <span id="user-points">0</span></div>
+      </div>
+      <button onclick="logout()">Sair</button>
+
+      <!-- Área Admin (só aparece se for AdiminGeral1333) -->
+      <div id="admin-panel" class="admin-only hidden">
+        <h3>🔧 Painel do Administrador</h3>
+        <p>Você é o criador! Plano: <strong>Master</strong> | Pontos: <span id="admin-points">100M</span></p>        <button onclick="startPointRain()">🌧️ Iniciar Chuva de Pontos (+5000 para todos)</button>
+      </div>
+
+      <hr style="margin: 20px 0;">
+      <h3>Gerar Conteúdo com IA</h3>
+      <input type="text" id="prompt" placeholder="Ex: anime de samurai futurista, 3 minutos" />
+      <button onclick="generateContent()">Gerar Vídeo/Imagem</button>
+      <div id="result" class="status hidden"></div>
+    </div>
+  </div>
+
+  <script>
+    // 👇 cole SEU firebaseConfig aqui (substitua esta linha!)
+    // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDFTBGvWHrFPeWMqhnMHsKx3vYQtowL-5A",
+  authDomain: "astrosli-v15-3c6c4.firebaseapp.com",
+  projectId: "astrosli-v15-3c6c4",
+  storageBucket: "astrosli-v15-3c6c4.firebasestorage.app",
+  messagingSenderId: "758776050208",
+  appId: "1:758776050208:web:9b69386e8c1a57486a0245",
+  measurementId: "G-S085SSNXL6"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
+    // Inicializa Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // Conta especial do criador
+    const ADMIN_NICK = "igggo999r@gmail.com";
+    const ADMIN_PASSWORD = "yutagattoutsu"; // Só para simulação inicial (na versão real, usaremos hash)
+
+    // Funções de login
+    function loginWithEmail() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      // Verifica se é o login especial do criador
+      if (email === ADMIN_NICK && password === ADMIN_PASSWORD) {
+        simulateAdminLogin();
+        return;
+      }
+
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => console.log("Login OK"))
+        .catch(err => alert("Erro: " + err.message));
+    }
+
+    function loginWithGoogle() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).catch(err => alert("Erro Google: " + err.message));    }
+
+    function createAccount() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          // Ao criar conta, dá 10.000 pontos
+          const user = userCredential.user;
+          db.collection("users").doc(user.uid).set({
+            email: user.email,
+            plan: "free",
+            points: 10000,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          alert("Conta criada! Você ganhou 10.000 pontos de boas-vindas! 🎉");
+        })
+        .catch(err => alert("Erro ao criar conta: " + err.message));
+    }
+
+    function logout() {
+      auth.signOut().then(() => showScreen("login"));
+    }
+
+    // Simula login do criador (sem precisar de email real)
+    function simulateAdminLogin() {
+      // Mostra tela do usuário
+      document.getElementById("user-email").textContent = "AdiminGeral1333 (Criador)";
+      document.getElementById("user-plan").textContent = "Master";
+      document.getElementById("user-points").textContent = "100.000.000";
+      document.getElementById("admin-panel").classList.remove("hidden");
+      document.getElementById("admin-points").textContent = "100M";
+      showScreen("user");
+    }
+
+    // Atualiza interface com dados reais do usuário
+    function loadUserData(user) {
+      const userRef = db.collection("users").doc(user.uid);
+      userRef.get().then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          document.getElementById("user-email").textContent = user.email;
+          document.getElementById("user-plan").textContent = data.plan || "free";
+          document.getElementById("user-points").textContent = data.points || 0;
+
+          // Se for o criador (você), mostra painel admin
+          if (user.email === "igggo99r@gmail.com") {
+            document.getElementById("admin-panel").classList.remove("hidden");
+          }
+        } else {          // Primeiro login: cria perfil
+          userRef.set({
+            email: user.email,
+            plan: "free",
+            points: 10000
+          });
+          document.getElementById("user-points").textContent = "10000";
+        }
+      });
+    }
+
+    // Controle de telas
+    function showScreen(screen) {
+      document.getElementById("login-screen").classList.add("hidden");
+      document.getElementById("user-screen").classList.add("hidden");
+      document.getElementById(screen + "-screen").classList.remove("hidden");
+    }
+
+    // Geração de conteúdo
+    function generateContent() {
+      const prompt = document.getElementById("prompt").value;
+      if (!prompt) return alert("Digite um comando!");
+
+      const userPoints = parseInt(document.getElementById("user-points").textContent.replace(/\./g, ""));
+      const minutes = prompt.match(/(\d+)\s*min/)?.[1] || 1;
+      const cost = minutes * 24; // 24 pontos por minuto
+
+      if (userPoints < cost) {
+        alert(`Você precisa de ${cost} pontos. Saldo atual: ${userPoints}`);
+        return;
+      }
+
+      // Simula processamento (1–10 min)
+      const time = Math.floor(Math.random() * 10) + 1;
+      document.getElementById("result").innerHTML = 
+        `⏳ Processando...<br>Seu conteúdo estará pronto em ${time} minuto(s).<br>Custo: ${cost} pontos.`;
+      document.getElementById("result").classList.remove("hidden");
+
+      // Atualiza pontos (simulado)
+      const newPoints = userPoints - cost;
+      document.getElementById("user-points").textContent = newPoints.toLocaleString('pt-BR');
+
+      // Na versão real, aqui chamaria a API de IA
+    }
+
+    // Chuva de pontos (só admin)
+    function startPointRain() {
+      if (!confirm("Iniciar chuva de pontos? Todos os usuários ganharão +5000 pontos.")) return;
+      alert("Chuva de pontos ativada! (Na versão real, isso atualizaria o banco)");
+    }
+    // Observa login
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        // Verifica se é o login especial
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        if (email === ADMIN_NICK && password === ADMIN_PASSWORD) {
+          simulateAdminLogin();
+        } else {
+          loadUserData(user);
+          showScreen("user");
+        }
+      } else {
+        showScreen("login");
+      }
+    });
+  </script>
+</body>
+                                                              </html>            email: user.email,
+            
